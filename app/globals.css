@@ -1,15 +1,33 @@
 @import "tailwindcss";
 
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Georgian:wght@300;400;500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap');
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  
+  /* Mardi.ge Brand Colors */
+  --brand-navy: #002A4A;
+  --brand-orange: #e5703a;
+  --brand-orange-hover: #d45a2a;
+  --brand-navy-hover: #001f3d;
+  
+  /* Typography */
+  --font-georgian: 'Noto Sans Georgian', 'Poppins', sans-serif;
+  --font-latin: 'Poppins', sans-serif;
+  
+  /* Elevation */
+  --shadow-soft: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-brand-navy: var(--brand-navy);
+  --color-brand-orange: var(--brand-orange);
+  --font-sans: var(--font-georgian);
+  --font-mono: var(--font-latin);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -22,5 +40,39 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-georgian);
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+/* Custom utility classes for Mardi.ge design system */
+.text-brand-navy {
+  color: var(--brand-navy);
+}
+
+.text-brand-orange {
+  color: var(--brand-orange);
+}
+
+.bg-brand-navy {
+  background-color: var(--brand-navy);
+}
+
+.bg-brand-orange {
+  background-color: var(--brand-orange);
+}
+
+.shadow-soft {
+  box-shadow: var(--shadow-soft);
+}
+
+/* Smooth transitions for interactive elements */
+.transition-smooth {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Focus styles for accessibility */
+.focus-ring:focus {
+  outline: 2px solid var(--brand-orange);
+  outline-offset: 2px;
 }
