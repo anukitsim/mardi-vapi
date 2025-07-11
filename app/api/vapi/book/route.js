@@ -4,20 +4,63 @@ import { NextResponse } from 'next/server';
 export async function POST(request) {
   try {
     // Parse the incoming JSON from Vapi
-    const { name, email, phone, preferred_time } = await request.json();
+    const { name, email, phone, preferred_time, client_type } = await request.json();
 
     console.log('📅 Booking request received:', {
       name,
       email, 
       phone,
-      preferred_time
+      preferred_time,
+      client_type
     });
 
-    // Validate required fields
-    if (!name || !email) {
+    // Strict validation - ALL fields are required
+    const missingFields = [];
+    if (!name || name.trim() === '') missingFields.push('name');
+    if (!email || email.trim() === '') missingFields.push('email');
+    if (!phone || phone.trim() === '') missingFields.push('phone');
+    if (!preferred_time || preferred_time.trim() === '') missingFields.push('preferred_time');
+    if (!client_type || client_type.trim() === '') missingFields.push('client_type');
+
+    if (missingFields.length > 0) {
+      console.log('❌ Missing required fields:', missingFields);
       return NextResponse.json({
         ok: false,
-        error: 'Name and email are required'
+        error: `Missing required information: ${missingFields.join(', ')}. Please provide all details before booking.`,
+        missing_fields: missingFields
+      }, { status: 400 });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return NextResponse.json({
+        ok: false,
+        error: 'Please provide a valid email address'
+      }, { status: 400 });
+    }
+
+    // Block test data
+    const testPatterns = [
+      /test.*user/i,
+      /john.*doe/i,
+      /jane.*doe/i,
+      /example/i,
+      /@test\./i,
+      /@example\./i,
+      /debug/i,
+      /placeholder/i
+    ];
+
+    const isTestData = testPatterns.some(pattern => 
+      pattern.test(name) || pattern.test(email)
+    );
+
+    if (isTestData) {
+      console.log('🚫 Test data detected, rejecting booking');
+      return NextResponse.json({
+        ok: false,
+        error: 'Test data is not allowed. Please provide real information.'
       }, { status: 400 });
     }
 
@@ -89,59 +132,120 @@ export async function POST(request) {
     // Parse preferred time or default to next business day at 10 AM
     let startTime;
     if (preferred_time) {
-      startTime = new Date(preferred_time);
+      // Try to parse the preferred time
+      try {
+        // Simple parsing for common formats
+        const now = new Date();
+        const timeStr = preferred_time.toLowerCase();
+        
+        if (timeStr.includes('tomorrow')) {
+          startTime = new Date(now);
+          startTime.setDate(now.getDate() + 1);
+          
+          // Extract time if specified
+          const timeMatch = timeStr.match(/(\d{1,2})(:\d{2})?\s*(am|pm)/i);
+          if (timeMatch) {
+            let hour = parseInt(timeMatch[1]);
+            const minutes = timeMatch[2] ? parseInt(timeMatch[2].substring(1)) : 0;
+            const period = timeMatch[3].toLowerCase();
+            
+            if (period === 'pm' && hour !== 12) hour += 12;
+            if (period === 'am' && hour === 12) hour = 0;
+            
+            startTime.setHours(hour, minutes, 0, 0);
+          } else {
+            startTime.setHours(14, 0, 0, 0); // Default to 2 PM
+          }
+        } else if (timeStr.includes('next')) {
+          startTime = new Date(now);
+          startTime.setDate(now.getDate() + 7); // Next week
+          startTime.setHours(10, 0, 0, 0); // Default to 10 AM
+        } else {
+          // Try to parse as a date
+          startTime = new Date(preferred_time);
+          if (isNaN(startTime.getTime())) {
+            // If parsing fails, use next business day
+            startTime = new Date(now);
+            startTime.setDate(now.getDate() + 1);
+            startTime.setHours(10, 0, 0, 0);
+          }
+        }
+      } catch (error) {
+        console.log('⚠️ Could not parse preferred time, using default');
+        startTime = new Date();
+        startTime.setDate(startTime.getDate() + 1);
+        startTime.setHours(10, 0, 0, 0);
+      }
     } else {
       // Default to next business day at 10 AM
       startTime = new Date();
       startTime.setDate(startTime.getDate() + 1);
       startTime.setHours(10, 0, 0, 0);
-      
-      // If it's weekend, move to Monday
-      if (startTime.getDay() === 0) startTime.setDate(startTime.getDate() + 1); // Sunday -> Monday
-      if (startTime.getDay() === 6) startTime.setDate(startTime.getDate() + 2); // Saturday -> Monday
     }
 
-    // Calculate end time (30 minutes later)
-    const endTime = new Date(startTime.getTime() + 30 * 60 * 1000);
+    // Ensure it's a business day
+    if (startTime.getDay() === 0) startTime.setDate(startTime.getDate() + 1); // Sunday -> Monday
+    if (startTime.getDay() === 6) startTime.setDate(startTime.getDate() + 2); // Saturday -> Monday
+
+    console.log('⏰ Using appointment time:', startTime.toISOString());
+
+    // Calculate end time (45 minutes later)
+    const endTime = new Date(startTime.getTime() + 45 * 60 * 1000);
 
     // Create the calendar event
     const event = {
-      summary: `Mardi consultation – ${name}`,
+      summary: `Mardi Consultation – ${name} (${client_type})`,
       description: `
-Consultation with ${name}
-Email: ${email}
-${phone ? `Phone: ${phone}` : ''}
+MARDI HOLDING - REAL ESTATE CONSULTATION
 
-Scheduled via Mardi Voice Assistant
+📋 CLIENT INFORMATION:
+• Name: ${name}
+• Email: ${email}
+• Phone: ${phone}
+• Client Type: ${client_type}
+• Requested Time: ${preferred_time}
+
+🏢 CONSULTATION AGENDA:
+• Property portfolio overview
+• Investment opportunities discussion
+• Market analysis and trends
+• Financial planning and payment options
+• Legal and documentation process
+• Next steps and follow-up
+
+📞 CONTACT INFORMATION:
+• Email: info@mardi.ge
+• Website: mardi.ge
+
+⏰ Scheduled via Mardi Voice Assistant
+📅 Event created: ${new Date().toISOString()}
       `.trim(),
       start: {
         dateTime: startTime.toISOString(),
-        timeZone: 'Europe/Tbilisi', // Adjust timezone as needed
+        timeZone: 'Asia/Tbilisi',
       },
       end: {
         dateTime: endTime.toISOString(),
-        timeZone: 'Europe/Tbilisi',
+        timeZone: 'Asia/Tbilisi',
       },
-      attendees: [
-        {
-          email: email,
-          displayName: name,
-        }
-      ],
       reminders: {
         useDefault: false,
         overrides: [
           { method: 'email', minutes: 24 * 60 }, // 1 day before
-          { method: 'popup', minutes: 15 },      // 15 minutes before
+          { method: 'popup', minutes: 30 },      // 30 minutes before
         ],
       },
+      creator: {
+        email: 'mardi-calendar-bot@mardi-435620.iam.gserviceaccount.com',
+        displayName: 'Mardi Calendar Bot'
+      }
     };
 
-    // Insert the event into Google Calendar
+    // Insert the event into Google Calendar (without attendees to avoid permission issues)
     const response = await calendar.events.insert({
       calendarId: calendarId,
       resource: event,
-      sendUpdates: 'all', // Send invites to attendees
+      sendUpdates: 'none', // Don't send invites (requires domain delegation for service accounts)
     });
 
     console.log('✅ Calendar event created:', response.data.id);
@@ -163,11 +267,15 @@ Scheduled via Mardi Voice Assistant
     return NextResponse.json({
       ok: true,
       booking_details: {
+        name: name,
+        email: email,
+        phone: phone,
+        client_type: client_type,
         date: formattedDate,
         time: formattedTime,
-        duration: '30 minutes',
+        duration: '45 minutes',
         calendar_event_id: response.data.id,
-        confirmation_message: `You're booked for ${formattedDate} at ${formattedTime}. A calendar invite has been sent to ${email}.`
+        confirmation_message: `Perfect! Your consultation is confirmed for ${formattedDate} at ${formattedTime}. The appointment details have been added to our calendar. We'll contact you at ${phone} or ${email} if needed.`
       }
     });
 
