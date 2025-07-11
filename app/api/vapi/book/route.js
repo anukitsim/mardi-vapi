@@ -22,23 +22,34 @@ export async function POST(request) {
     }
 
     // Load environment variables
-    const gcpServiceKey = process.env.GCP_SERVICE_KEY;
     const calendarId = process.env.CAL_ID;
 
-    if (!gcpServiceKey || !calendarId) {
-      console.error('❌ Missing environment variables');
+    if (!calendarId) {
+      console.error('❌ Missing CAL_ID environment variable');
       return NextResponse.json({
         ok: false,
         error: 'Server configuration error'
       }, { status: 500 });
     }
 
-    // Parse the service account key
+    // Load service account key from environment variables or file
     let serviceAccountKey;
     try {
-      serviceAccountKey = JSON.parse(gcpServiceKey);
+      // Try loading from environment variable first (for production)
+      if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+        console.log('🔍 Loading service account from environment variable');
+        serviceAccountKey = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+        console.log('✅ Service account loaded from environment variable');
+      } else {
+        console.error('❌ Missing GOOGLE_SERVICE_ACCOUNT_KEY environment variable');
+        return NextResponse.json({
+          ok: false,
+          error: 'Service account configuration missing'
+        }, { status: 500 });
+      }
+      
     } catch (error) {
-      console.error('❌ Invalid GCP_SERVICE_KEY format:', error);
+      console.error('❌ Failed to load service account:', error);
       return NextResponse.json({
         ok: false,
         error: 'Invalid service account configuration'
