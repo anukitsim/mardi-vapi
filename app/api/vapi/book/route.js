@@ -34,26 +34,48 @@ export async function POST(request) {
 
     // Load service account key from environment variables or file
     let serviceAccountKey;
-    try {
-      // Try loading from environment variable first (for production)
-      if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
-        console.log('🔍 Loading service account from environment variable');
-        serviceAccountKey = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
-        console.log('✅ Service account loaded from environment variable');
-      } else {
-        console.error('❌ Missing GOOGLE_SERVICE_ACCOUNT_KEY environment variable');
+    if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+      console.log('🔍 Loading service account from environment variable');
+      try {
+        // Fix escaped newlines in private key
+        let serviceAccountData = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+        serviceAccountKey = JSON.parse(serviceAccountData);
+        
+        // Fix the private key format if it has escaped newlines
+        if (serviceAccountKey.private_key && serviceAccountKey.private_key.includes('\\n')) {
+          serviceAccountKey.private_key = serviceAccountKey.private_key.replace(/\\n/g, '\n');
+        }
+        
+        console.log('✅ Service account parsed from environment variable');
+      } catch (error) {
+        console.error('❌ Failed to parse service account from environment variable:', error);
+        return NextResponse.json({
+          ok: false,
+          error: 'Invalid service account configuration'
+        }, { status: 500 });
+      }
+    } else {
+      // Fallback to file for local development (add fs import at top)
+      try {
+        const fs = require('fs/promises');
+        const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS || 
+                                 process.cwd() + '/service-account.json';
+        
+        console.log('🔍 Attempting to load service account from:', serviceAccountPath);
+        
+        const serviceAccountData = await fs.readFile(serviceAccountPath, 'utf8');
+        console.log('✅ Service account file read successfully, length:', serviceAccountData.length);
+        
+        serviceAccountKey = JSON.parse(serviceAccountData);
+        console.log('✅ Service account JSON parsed successfully');
+        
+      } catch (error) {
+        console.error('❌ Failed to load service account file:', error);
         return NextResponse.json({
           ok: false,
           error: 'Service account configuration missing'
         }, { status: 500 });
       }
-      
-    } catch (error) {
-      console.error('❌ Failed to load service account:', error);
-      return NextResponse.json({
-        ok: false,
-        error: 'Invalid service account configuration'
-      }, { status: 500 });
     }
 
     // Set up Google Calendar API
